@@ -12,7 +12,7 @@ then
 else
   echo "*** Skipping cross validation ***"
   C="32.0"
-  G="0.03125"
+  g="0.03125"
 fi
 
 echo "C=$C"
