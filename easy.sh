@@ -1,3 +1,7 @@
+./libsvm-3.20/svm-predict test.out <(python featurize.py data/review_short_train.json train.out data/review_short_test.json test.out | ./libsvm-3.20/svm-train -c 32 -g 0.03125 blah) predict.out
+
+exit
+
 echo "*** Featurizing ***"
 time python featurize.py data/review_short_train.json train data/review_short_test.json test
 

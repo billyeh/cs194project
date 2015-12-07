@@ -194,7 +194,7 @@ int main(int argc, char **argv)
 	if(i>=argc-2)
 		exit_with_help();
 
-	input = fopen(argv[i],"r");
+    input = fopen(argv[i],"r");
 	if(input == NULL)
 	{
 		fprintf(stderr,"can't open input file %s\n",argv[i]);

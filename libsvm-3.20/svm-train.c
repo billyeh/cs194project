@@ -279,7 +279,7 @@ void read_problem(const char *filename)
 {
 	int max_index, inst_max_index, i;
 	size_t elements, j;
-	FILE *fp = fopen(filename,"r");
+	FILE *fp = stdin; // fopen(filename,"r");
 	char *endptr;
 	char *idx, *val, *label;
 
@@ -288,12 +288,14 @@ void read_problem(const char *filename)
 		fprintf(stderr,"can't open input file %s\n",filename);
 		exit(1);
 	}
-
-	prob.l = 0;
-	elements = 0;
-
-	max_line_len = 1024;
-	line = Malloc(char,max_line_len);
+    
+    max_line_len = 1024;
+    line = Malloc(char,max_line_len);
+    
+    prob.l = atoi(readline(fp));
+    elements = atoi(readline(fp));
+    
+    /*
 	while(readline(fp)!=NULL)
 	{
 		char *p = strtok(line," \t"); // label
@@ -310,7 +312,11 @@ void read_problem(const char *filename)
 		++prob.l;
 	}
 	rewind(fp);
-
+    
+    printf("%d, %d\n", prob.l, elements);
+    getchar();
+    */
+    
 	prob.y = Malloc(double,prob.l);
 	prob.x = Malloc(struct svm_node *,prob.l);
 	x_space = Malloc(struct svm_node,elements);
@@ -323,11 +329,11 @@ void read_problem(const char *filename)
 		readline(fp);
 		prob.x[i] = &x_space[j];
 		label = strtok(line," \t\n");
-		if(label == NULL) // empty line
-			exit_input_error(i+1);
+        if(label == NULL) // empty line
+            exit_input_error(i+1);
 
 		prob.y[i] = strtod(label,&endptr);
-		if(endptr == label || *endptr != '\0')
+        if(endptr == label || *endptr != '\0')
 			exit_input_error(i+1);
 
 		while(1)
