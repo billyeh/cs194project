@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <cmath>
 #include "svm.h"
 
 int print_null(const char *s,...) {return 0;}
@@ -45,6 +46,7 @@ void exit_input_error(int line_num)
 void predict(FILE *input, FILE *output)
 {
 	int correct = 0;
+	double weightedCorrect;
 	int total = 0;
 	double error = 0;
 	double sump = 0, sumt = 0, sumpp = 0, sumtt = 0, sumpt = 0;
@@ -135,6 +137,24 @@ void predict(FILE *input, FILE *output)
 
 		if(predict_label == target_label)
 			++correct;
+
+		switch (abs(predict_label - target_label)) {
+			case 0:
+				weightedCorrect += 1;
+				break;
+			case 1:
+				weightedCorrect += 0.9;
+				break;
+			case 2:
+				weightedCorrect += 0.7;
+				break;
+			case 3:
+				weightedCorrect += 0.2;
+				break;
+			default:
+				break;
+		}
+
 		error += (predict_label-target_label)*(predict_label-target_label);
 		sump += predict_label;
 		sumt += target_label;
@@ -152,8 +172,8 @@ void predict(FILE *input, FILE *output)
 			);
 	}
 	else
-		info("Accuracy = %g%% (%d/%d) (classification)\n",
-			(double)correct/total*100,correct,total);
+		info("Accuracy = %g%% (%d/%d) (classification)\n and weightedCorrect = %g%% (%g%/%d) \n",
+			(double)correct/total*100,correct,total, (double)weightedCorrect/total*100, weightedCorrect, total);
 	if(predict_probability)
 		free(prob_estimates);
 }
