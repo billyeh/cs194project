@@ -2883,7 +2883,7 @@ bool read_model_header(FILE *fp, svm_model* model)
 
 svm_model *svm_load_model(const char *model_file_name)
 {
-    FILE *fp = fopen(model_file_name,"rb");
+    FILE *fp = fopen(model_file_name,"r+");
 	if(fp==NULL) return NULL;
 
 	char *old_locale = strdup(setlocale(LC_ALL, NULL));
@@ -2914,30 +2914,11 @@ svm_model *svm_load_model(const char *model_file_name)
 
 	// read sv_coef and SV
 
-	int elements = 0;
-	//long pos = ftell(fp);
-
 	max_line_len = 1024;
 	line = Malloc(char,max_line_len);
 	char *p,*endptr,*idx,*val;
 
-	elements = atoi(readline(fp));
-
-	/*
-	while(readline(fp)!=NULL)
-	{
-		p = strtok(line,":");
-		while(1)
-		{
-			p = strtok(NULL,":");
-			if(p == NULL)
-				break;
-			++elements;
-		}
-	}
-	elements += model->l;*/
-
-	//fseek(fp,pos,SEEK_SET);
+	int elements = atoi(readline(fp));
 
 	int m = model->nr_class - 1;
 	int l = model->l;
@@ -2952,7 +2933,7 @@ svm_model *svm_load_model(const char *model_file_name)
 	int j=0;
 	for(i=0;i<l;i++)
 	{
-		readline(fp);
+        readline(fp);
 		model->SV[i] = &x_space[j];
 
 		p = strtok(line, " \t");

@@ -294,29 +294,7 @@ void read_problem(const char *filename)
     
     prob.l = atoi(readline(fp));
     elements = atoi(readline(fp));
-    
-    /*
-	while(readline(fp)!=NULL)
-	{
-		char *p = strtok(line," \t"); // label
 
-		// features
-		while(1)
-		{
-			p = strtok(NULL," \t");
-			if(p == NULL || *p == '\n') // check '\n' as ' ' may be after the last feature
-				break;
-			++elements;
-		}
-		++elements;
-		++prob.l;
-	}
-	rewind(fp);
-    
-    printf("%d, %d\n", prob.l, elements);
-    getchar();
-    */
-    
 	prob.y = Malloc(double,prob.l);
 	prob.x = Malloc(struct svm_node *,prob.l);
 	x_space = Malloc(struct svm_node,elements);
@@ -362,7 +340,7 @@ void read_problem(const char *filename)
 		if(inst_max_index > max_index)
 			max_index = inst_max_index;
 		x_space[j++].index = -1;
-	}
+    }
 
 	if(param.gamma == 0 && max_index > 0)
 		param.gamma = 1.0/max_index;

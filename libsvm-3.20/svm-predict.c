@@ -73,8 +73,10 @@ void predict(FILE *input, FILE *output)
 
 	max_line_len = 1024;
 	line = (char *)malloc(max_line_len*sizeof(char));
-	while(readline(input) != NULL)
+    int num_lines = atoi(readline(input));
+    while (num_lines-- > 0)
 	{
+        readline(input);
 		int i = 0;
 		double target_label, predict_label;
 		char *idx, *val, *label, *endptr;
@@ -194,7 +196,7 @@ int main(int argc, char **argv)
 	if(i>=argc-2)
 		exit_with_help();
 
-    input = fopen(argv[i],"r");
+    input = fopen(argv[i],"r+");
 	if(input == NULL)
 	{
 		fprintf(stderr,"can't open input file %s\n",argv[i]);
