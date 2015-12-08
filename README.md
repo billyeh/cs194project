@@ -1,4 +1,4 @@
-Rough outline of code: generate test and training data using `data/create_files.sh`, 
+Rough outline of code: generate test and training data using `data/create_files.sh` -> 
 featurize using `featurize.py` (training and test data) -> train using 
 `svmlib` (training data) -> predict using `svmlib` (test data).
 
