@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <cmath>
+#include <math.h>
+#include <sys/time.h>
 #include "svm.h"
 
 int print_null(const char *s,...) {return 0;}
@@ -29,7 +30,7 @@ static char* readline(FILE *input)
 	while(strrchr(line,'\n') == NULL)
 	{
 		max_line_len *= 2;
-		line = (char *) realloc(line,max_line_len);
+		line = (char *) realloc(line,(size_t)max_line_len);
 		len = (int) strlen(line);
 		if(fgets(line+len,max_line_len-len,input) == NULL)
 			break;
@@ -46,7 +47,7 @@ void exit_input_error(int line_num)
 void predict(FILE *input, FILE *output)
 {
 	int correct = 0;
-	double weightedCorrect;
+	double weighted_correct = 0;
 	int total = 0;
 	double error = 0;
 	double sump = 0, sumt = 0, sumpp = 0, sumtt = 0, sumpt = 0;
@@ -62,9 +63,9 @@ void predict(FILE *input, FILE *output)
 			info("Prob. model for test data: target value = predicted value + z,\nz: Laplace distribution e^(-|z|/sigma)/(2sigma),sigma=%g\n",svm_get_svr_probability(model));
 		else
 		{
-			int *labels=(int *) malloc(nr_class*sizeof(int));
+			int *labels=(int *) malloc((size_t)nr_class*sizeof(int));
 			svm_get_labels(model,labels);
-			prob_estimates = (double *) malloc(nr_class*sizeof(double));
+			prob_estimates = (double *) malloc((size_t)nr_class*sizeof(double));
 			fprintf(output,"labels");		
 			for(j=0;j<nr_class;j++)
 				fprintf(output," %d",labels[j]);
@@ -74,7 +75,7 @@ void predict(FILE *input, FILE *output)
 	}
 
 	max_line_len = 1024;
-	line = (char *)malloc(max_line_len*sizeof(char));
+	line = (char *)malloc((size_t)max_line_len*sizeof(char));
     int num_lines = atoi(readline(input));
     while (num_lines-- > 0)
 	{
@@ -97,7 +98,7 @@ void predict(FILE *input, FILE *output)
 			if(i>=max_nr_attr-1)	// need one more for index = -1
 			{
 				max_nr_attr *= 2;
-				x = (struct svm_node *) realloc(x,max_nr_attr*sizeof(struct svm_node));
+				x = (struct svm_node *) realloc(x,(size_t)max_nr_attr*sizeof(struct svm_node));
 			}
 
 			idx = strtok(NULL,":");
@@ -138,18 +139,18 @@ void predict(FILE *input, FILE *output)
 		if(predict_label == target_label)
 			++correct;
 
-		switch (abs(predict_label - target_label)) {
+		switch (abs((int)(predict_label - target_label))) {
 			case 0:
-				weightedCorrect += 1;
+				weighted_correct += 1;
 				break;
 			case 1:
-				weightedCorrect += 0.9;
+				weighted_correct += 0.9;
 				break;
 			case 2:
-				weightedCorrect += 0.7;
+				weighted_correct += 0.7;
 				break;
 			case 3:
-				weightedCorrect += 0.2;
+				weighted_correct += 0.2;
 				break;
 			default:
 				break;
@@ -172,8 +173,8 @@ void predict(FILE *input, FILE *output)
 			);
 	}
 	else
-		info("Accuracy = %g%% (%d/%d) (classification)\n and weightedCorrect = %g%% (%g%/%d) \n",
-			(double)correct/total*100,correct,total, (double)weightedCorrect/total*100, weightedCorrect, total);
+		info("Accuracy = %g%% (%d/%d) (classification)\n and weighted_correct = %g%% (%g%/%d) \n",
+			(double)correct/total*100,correct,total, (double)weighted_correct/total*100, weighted_correct, total);
 	if(predict_probability)
 		free(prob_estimates);
 }
@@ -236,7 +237,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	x = (struct svm_node *) malloc(max_nr_attr*sizeof(struct svm_node));
+	x = (struct svm_node *) malloc((size_t)max_nr_attr*sizeof(struct svm_node));
 	if(predict_probability)
 	{
 		if(svm_check_probability_model(model)==0)
@@ -251,7 +252,16 @@ int main(int argc, char **argv)
 			info("Model supports probability estimates, but disabled in prediction.\n");
 	}
 
+    struct timeval start, stop;
+    gettimeofday(&start, NULL);
+
 	predict(input,output);
+
+    gettimeofday(&stop, NULL);
+    fprintf(stderr, "predict: %f secs\n",
+            (stop.tv_sec - start.tv_sec) +
+            (stop.tv_usec - start.tv_usec) / 1e6);
+
 	svm_free_and_destroy_model(&model);
 	free(x);
 	free(line);

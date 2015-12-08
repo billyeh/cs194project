@@ -3,8 +3,9 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <sys/time.h>
 #include "svm.h"
-#define Malloc(type,n) (type *)malloc((n)*sizeof(type))
+#define Malloc(type,n) (type *)malloc((size_t)(n)*sizeof(type))
 
 void print_null(const char *s) {}
 
@@ -72,7 +73,7 @@ static char* readline(FILE *input)
 	while(strrchr(line,'\n') == NULL)
 	{
 		max_line_len *= 2;
-		line = (char *) realloc(line,max_line_len);
+		line = (char *) realloc(line,(size_t)max_line_len);
 		len = (int) strlen(line);
 		if(fgets(line+len,max_line_len-len,input) == NULL)
 			break;
@@ -102,7 +103,16 @@ int main(int argc, char **argv)
 	}
 	else
 	{
+        struct timeval start, stop;
+        gettimeofday(&start, NULL);
+
 		model = svm_train(&prob,&param);
+        
+        gettimeofday(&stop, NULL);
+        fprintf(stderr, "svm_train: %f secs\n",
+                (stop.tv_sec - start.tv_sec)
+                + (stop.tv_usec - start.tv_usec) / 1e6);
+
 		if(svm_save_model(model_file_name,model))
 		{
 			fprintf(stderr, "can't save model to file %s\n", model_file_name);
@@ -240,8 +250,10 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 				break;
 			case 'w':
 				++param.nr_weight;
-				param.weight_label = (int *)realloc(param.weight_label,sizeof(int)*param.nr_weight);
-				param.weight = (double *)realloc(param.weight,sizeof(double)*param.nr_weight);
+				param.weight_label = (int *)realloc(param.weight_label,
+                        sizeof(int)*(size_t)param.nr_weight);
+				param.weight = (double *)realloc(param.weight,
+                        sizeof(double)*(size_t)param.nr_weight);
 				param.weight_label[param.nr_weight-1] = atoi(&argv[i-1][2]);
 				param.weight[param.nr_weight-1] = atof(argv[i]);
 				break;
@@ -293,7 +305,7 @@ void read_problem(const char *filename)
     line = Malloc(char,max_line_len);
     
     prob.l = atoi(readline(fp));
-    elements = atoi(readline(fp));
+    elements = (size_t)atol(readline(fp));
 
 	prob.y = Malloc(double,prob.l);
 	prob.x = Malloc(struct svm_node *,prob.l);

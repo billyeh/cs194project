@@ -7,6 +7,9 @@
 #include <stdarg.h>
 #include <limits.h>
 #include <locale.h>
+#include <immintrin.h>
+#include <libiomp/omp.h>
+#include "fastexp.hpp" // for exp_taylor5
 #include "svm.h"
 int libsvm_version = LIBSVM_VERSION;
 typedef float Qfloat;
@@ -238,7 +241,7 @@ private:
 	}
 	double kernel_rbf(int i, int j) const
 	{
-		return exp(-gamma*(x_square[i]+x_square[j]-2*dot(x[i],x[j])));
+		return exp_taylor5(-gamma*(x_square[i]+x_square[j]-2*dot(x[i],x[j])));
 	}
 	double kernel_sigmoid(int i, int j) const
 	{
@@ -361,7 +364,7 @@ double Kernel::k_function(const svm_node *x, const svm_node *y,
 				++y;
 			}
 
-			return exp(-param.gamma*sum);
+			return exp_taylor5(-param.gamma*sum);
 		}
 		case SIGMOID:
 			return tanh(param.gamma*dot(x,y)+param.coef0);
@@ -1279,10 +1282,11 @@ public:
 	Qfloat *get_Q(int i, int len) const
 	{
 		Qfloat *data;
-		int start, j;
+		int start;
 		if((start = cache->get_data(i,&data,len)) < len)
 		{
-			for(j=start;j<len;j++)
+            #pragma omp parallel for
+			for (int j = start; j < len; ++j)
 				data[j] = (Qfloat)(y[i]*y[j]*(this->*kernel_function)(i,j));
 		}
 		return data;
@@ -2507,6 +2511,7 @@ double svm_predict_values(const svm_model *model, const svm_node *x, double* dec
 	{
 		double *sv_coef = model->sv_coef[0];
 		double sum = 0;
+        #pragma omp parallel for reduction(+:sum)
 		for(i=0;i<model->l;i++)
 			sum += sv_coef[i] * Kernel::k_function(x,model->SV[i],model->param);
 		sum -= model->rho[0];
@@ -2519,21 +2524,22 @@ double svm_predict_values(const svm_model *model, const svm_node *x, double* dec
 	}
 	else
 	{
-		int nr_class = model->nr_class;
+		int nr_class = 5;
 		int l = model->l;
 
 		double *kvalue = Malloc(double,l);
-		for(i=0;i<l;i++)
+		for (i = 0; i < l; ++i) {
 			kvalue[i] = Kernel::k_function(x,model->SV[i],model->param);
+        }
 
-		int *start = Malloc(int,nr_class);
+		int start[5];
 		start[0] = 0;
-		for(i=1;i<nr_class;i++)
-			start[i] = start[i-1]+model->nSV[i-1];
+		start[1] = start[0] + model->nSV[0];
+		start[2] = start[1] + model->nSV[1];
+		start[3] = start[2] + model->nSV[2];
+		start[4] = start[3] + model->nSV[3];
 
-		int *vote = Malloc(int,nr_class);
-		for(i=0;i<nr_class;i++)
-			vote[i] = 0;
+		int vote[5] = {0};
 
 		int p=0;
 		for(i=0;i<nr_class;i++)
@@ -2544,14 +2550,38 @@ double svm_predict_values(const svm_model *model, const svm_node *x, double* dec
 				int sj = start[j];
 				int ci = model->nSV[i];
 				int cj = model->nSV[j];
+                __m128d v1, v2, vsum = _mm_setzero_pd();
 
 				int k;
-				double *coef1 = model->sv_coef[j-1];
+				double *coef1 = model->sv_coef[j - 1];
 				double *coef2 = model->sv_coef[i];
-				for(k=0;k<ci;k++)
-					sum += coef1[si+k] * kvalue[si+k];
-				for(k=0;k<cj;k++)
-					sum += coef2[sj+k] * kvalue[sj+k];
+				for (k = 0; k < ci / 4 * 4; k += 4) {
+                    v1 = _mm_loadu_pd(coef1 + si + k);
+                    v2 = _mm_loadu_pd(kvalue + si + k);
+                    vsum = _mm_add_pd(vsum, _mm_mul_pd(v1, v2));
+
+                    v1 = _mm_loadu_pd(coef1 + si + k + 2);
+                    v2 = _mm_loadu_pd(kvalue + si + k + 2);
+                    vsum = _mm_add_pd(vsum, _mm_mul_pd(v1, v2));
+                }
+                for (k = ci / 4 * 4; k < ci; ++k) {
+                    sum += coef1[si + k] * kvalue[si + k];
+                }
+				for (k = 0; k < cj / 4 * 4; k += 4) {
+                    v1 = _mm_loadu_pd(coef2 + sj + k);
+                    v2 = _mm_loadu_pd(kvalue + sj + k);
+                    vsum = _mm_add_pd(vsum, _mm_mul_pd(v1, v2));
+
+                    v1 = _mm_loadu_pd(coef2 + sj + k + 2);
+                    v2 = _mm_loadu_pd(kvalue + sj + k + 2);
+                    vsum = _mm_add_pd(vsum, _mm_mul_pd(v1, v2));
+                }
+				for (k = cj / 4 * 4 ; k < cj; ++k) {
+					sum += coef2[sj + k] * kvalue[sj + k];
+                }
+
+                double *sums = (double *)&vsum;
+                sum += sums[0] + sums[1];
 				sum -= model->rho[p];
 				dec_values[p] = sum;
 
@@ -2563,13 +2593,12 @@ double svm_predict_values(const svm_model *model, const svm_node *x, double* dec
 			}
 
 		int vote_max_idx = 0;
-		for(i=1;i<nr_class;i++)
-			if(vote[i] > vote[vote_max_idx])
-				vote_max_idx = i;
+        if (vote[1] > vote[vote_max_idx]) vote_max_idx = 1;
+        if (vote[2] > vote[vote_max_idx]) vote_max_idx = 2;
+        if (vote[3] > vote[vote_max_idx]) vote_max_idx = 3;
+        if (vote[4] > vote[vote_max_idx]) vote_max_idx = 4;
 
 		free(kvalue);
-		free(start);
-		free(vote);
 		return model->label[vote_max_idx];
 	}
 }
