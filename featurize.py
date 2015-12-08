@@ -43,8 +43,6 @@ def output_reviews(X, Y, prints_num_lines=False, prints_num_elems=False,
 
 
 def main(training_infile, test_infile):
-    t0 = time.time()
-
     X_train = []
     Y_train = []
     X_test = []
@@ -61,16 +59,20 @@ def main(training_infile, test_infile):
             X_test.append(review['text'])
             Y_test.append(review['stars'])
 
+    t0 = time.time()
     X_train, X_test = vectorize_corpus(X_train, Y_train, X_test)
+    print('\bdone with featurizing in {0} seconds\n'.format(time.time() - t0))
 
     proc_train = subprocess.Popen(['./libsvm-3.20/svm-train',
                                    '-c', '32', '-g', '0.03125',
                                    '/dev/null'],
                                   stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE)
+    t1 = time.time()
     output_reviews(X_train, Y_train,
                    prints_num_lines=True, prints_num_elems=True,
                    stdout=proc_train.stdin)
+    t = time.time() - t1
     proc_train.stdin.close()
 
     with named_pipe() as test_path, named_pipe() as model_path:
@@ -79,14 +81,17 @@ def main(training_infile, test_infile):
                                          model_path, # model file
                                          'predict.out'])
 
+        t1 = time.time()
         with open(model_path, 'w+') as model_pipe:
-            model_pipe.write(proc_train.stdout.read())
+            for line in proc_train.stdout:
+                model_pipe.write(line)
         with open(test_path, 'w+') as test_pipe:
             output_reviews(X_test, Y_test,
                            prints_num_lines=True, prints_num_elems=False,
                            stdout=test_pipe)
+        print('\bdone with IO in {0} seconds\n'.format(time.time() - t1 + t))
 
-    print('done in {0} seconds'.format(time.time() - t0))
+    print('\nall done in {0} seconds\n'.format(time.time() - t0))
 
 
 if __name__ == "__main__":

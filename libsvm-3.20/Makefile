@@ -1,5 +1,5 @@
 CXX = clang-omp++
-CFLAGS = -Wall -Wconversion -O3 -ffast-math -fomit-frame-pointer -fopenmp -fPIC -msse4.2
+CFLAGS = -Wall -Wconversion -O3 -ffast-math -flto -fomit-frame-pointer -fopenmp -fPIC -msse4.2
 SHVER = 2
 OS = $(shell uname)
 
