@@ -1,4 +1,4 @@
-import contextlib, itertools, json, os, shutil, subprocess, sys, tempfile
+import contextlib, itertools, json, os, shutil, subprocess, sys, tempfile, time
 
 import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
@@ -43,6 +43,8 @@ def output_reviews(X, Y, prints_num_lines=False, prints_num_elems=False,
 
 
 def main(training_infile, test_infile):
+    t0 = time.time()
+
     X_train = []
     Y_train = []
     X_test = []
@@ -84,7 +86,7 @@ def main(training_infile, test_infile):
                            prints_num_lines=True, prints_num_elems=False,
                            stdout=test_pipe)
 
-    print('done')
+    print('done in {0} seconds'.format(time.time() - t0))
 
 
 if __name__ == "__main__":

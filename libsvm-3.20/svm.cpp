@@ -7,7 +7,7 @@
 #include <stdarg.h>
 #include <limits.h>
 #include <locale.h>
-#include <immintrin.h>
+#include <x86intrin.h>
 #include <libiomp/omp.h>
 #include "fastexp.hpp" // for exp_taylor5
 #include "svm.h"
@@ -294,14 +294,51 @@ Kernel::~Kernel()
 	delete[] x_square;
 }
 
+typedef union {
+    __m128d v[8];
+    double s[16];
+} vec16;
+
 double Kernel::dot(const svm_node *px, const svm_node *py)
 {
-	double sum = 0;
-	while(px->index != -1 && py->index != -1)
+    int i = 0;
+    vec16 v1, v2, vsum;
+    vsum.v[0] = _mm_setzero_pd();
+    vsum.v[1] = _mm_setzero_pd();
+    vsum.v[2] = _mm_setzero_pd();
+    vsum.v[3] = _mm_setzero_pd();
+    vsum.v[4] = _mm_setzero_pd();
+    vsum.v[5] = _mm_setzero_pd();
+    vsum.v[6] = _mm_setzero_pd();
+    vsum.v[7] = _mm_setzero_pd();
+
+	while (px->index != -1 && py->index != -1)
 	{
 		if(px->index == py->index)
 		{
-			sum += px->value * py->value;
+            v1.s[i] = px->value;
+            v2.s[i] = py->value;
+            ++i;
+            if ((i & 0b1111) == 0) {
+                vsum.v[0] = _mm_add_pd(
+                        vsum.v[0], _mm_mul_pd(v1.v[0], v2.v[0]));
+                vsum.v[1] = _mm_add_pd(
+                        vsum.v[1], _mm_mul_pd(v1.v[1], v2.v[1]));
+                vsum.v[2] = _mm_add_pd(
+                        vsum.v[2], _mm_mul_pd(v1.v[2], v2.v[2]));
+                vsum.v[3] = _mm_add_pd(
+                        vsum.v[3], _mm_mul_pd(v1.v[3], v2.v[3]));
+                vsum.v[4] = _mm_add_pd(
+                        vsum.v[4], _mm_mul_pd(v1.v[4], v2.v[4]));
+                vsum.v[5] = _mm_add_pd(
+                        vsum.v[5], _mm_mul_pd(v1.v[5], v2.v[5]));
+                vsum.v[6] = _mm_add_pd(
+                        vsum.v[6], _mm_mul_pd(v1.v[6], v2.v[6]));
+                vsum.v[7] = _mm_add_pd(
+                        vsum.v[7], _mm_mul_pd(v1.v[7], v2.v[7]));
+                i = 0;
+            }
+
 			++px;
 			++py;
 		}
@@ -313,6 +350,18 @@ double Kernel::dot(const svm_node *px, const svm_node *py)
 				++px;
 		}
 	}
+    
+    vsum.v[0] = _mm_add_pd(vsum.v[0], vsum.v[1]);
+    vsum.v[0] = _mm_add_pd(vsum.v[0], vsum.v[2]);
+    vsum.v[0] = _mm_add_pd(vsum.v[0], vsum.v[3]);
+    vsum.v[0] = _mm_add_pd(vsum.v[0], vsum.v[4]);
+    vsum.v[0] = _mm_add_pd(vsum.v[0], vsum.v[5]);
+    vsum.v[0] = _mm_add_pd(vsum.v[0], vsum.v[6]);
+    vsum.v[0] = _mm_add_pd(vsum.v[0], vsum.v[7]);
+    double sum = vsum.s[0] + vsum.s[1];
+    while (--i >= 0) {
+        sum += v1.s[i] * v2.s[i];
+    }
 	return sum;
 }
 
@@ -2528,9 +2577,8 @@ double svm_predict_values(const svm_model *model, const svm_node *x, double* dec
 		int l = model->l;
 
 		double *kvalue = Malloc(double,l);
-		for (i = 0; i < l; ++i) {
+		for (i = 0; i < l; ++i)
 			kvalue[i] = Kernel::k_function(x,model->SV[i],model->param);
-        }
 
 		int start[5];
 		start[0] = 0;
@@ -2555,6 +2603,7 @@ double svm_predict_values(const svm_model *model, const svm_node *x, double* dec
 				int k;
 				double *coef1 = model->sv_coef[j - 1];
 				double *coef2 = model->sv_coef[i];
+
 				for (k = 0; k < ci / 4 * 4; k += 4) {
                     v1 = _mm_loadu_pd(coef1 + si + k);
                     v2 = _mm_loadu_pd(kvalue + si + k);
@@ -2567,6 +2616,7 @@ double svm_predict_values(const svm_model *model, const svm_node *x, double* dec
                 for (k = ci / 4 * 4; k < ci; ++k) {
                     sum += coef1[si + k] * kvalue[si + k];
                 }
+
 				for (k = 0; k < cj / 4 * 4; k += 4) {
                     v1 = _mm_loadu_pd(coef2 + sj + k);
                     v2 = _mm_loadu_pd(kvalue + sj + k);
